@@ -573,7 +573,7 @@ bool isAccepted(const vvvi &transitions, vvi finalStates, string str, const int 
 }
 
 int main(){
-    ifstream f("input5.txt");
+    ifstream f("input.txt");
     string inputstr;
     getline(f, inputstr);
     int strlength = inputstr.length();
