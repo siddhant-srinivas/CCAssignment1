@@ -604,6 +604,25 @@ int main(){
     int leftptr = 0;
     int subSize = strlength;
     int count = 0;
+
+    //Dealing with empty strings
+    if(strlength == 0){
+        int emptyFlag = 0;
+        string emptyString = "";
+        for(int i = 0; i < NFASet.size(); i++){
+            if(isAccepted(NFASet[i]->NFAtransitions, NFASet[i]->finalStates, emptyString, NFASet[i]->numStates) == true){
+                emptyFlag = 1;
+                lexemes.push_back(emptyString);
+                indices.push_back(i+1);
+                break;
+            }
+        }
+        if(emptyFlag == 0){
+            lexemes.push_back(emptyString);
+            indices.push_back(0);
+        }
+    }
+    
     while(leftptr<strlength){
         string subString = inputstr.substr(leftptr, subSize);
         int flag = 0;
