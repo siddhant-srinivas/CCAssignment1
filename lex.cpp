@@ -5,6 +5,7 @@
 #include <vector>
 #include <set>
 #include <unordered_set>
+#include <unordered_map>
 #include <map>
 #include <stack>
 #include <queue>
@@ -12,7 +13,6 @@
 using namespace std;
 typedef vector<vector<vector<int> > > vvvi;
 typedef vector<vector<int> > vvi;
-
 class Node{
 public:
     char data;
@@ -114,10 +114,12 @@ NFA* eval_concat(Node* root){
     NFA *nfa = new struct NFA;
     NFA *lNfa = eval(root->left);
     NFA *rNfa = eval(root->right);
-    Transition t;
-    t.inputChar = 'e';
-    t.destinationStates.push_back(rNfa->startState);
-    lNfa->finalState->transitions.push_back(t);
+
+    Transition t1;
+    t1.inputChar = 'e';
+    t1.destinationStates.push_back(rNfa->startState);
+    lNfa->finalState->transitions.push_back(t1);
+
     nfa->startState = lNfa->startState;
     nfa->finalState = rNfa->finalState;
     return nfa;
@@ -154,27 +156,32 @@ NFA* eval_kleene(Node* root){
     NFA* nfa = new struct NFA;
     NFA* lNfa = eval(root->left);
     nfa->startState = new struct State;
+    nfa->finalState = new struct State;
 
     struct Transition t1;
     t1.inputChar = 'e';
     t1.destinationStates.push_back(lNfa->startState);
-    t1.destinationStates.push_back(lNfa->finalState);
+    t1.destinationStates.push_back(nfa->finalState);
     nfa->startState->transitions.push_back(t1);
 
     struct Transition t2;
     t2.inputChar = 'e';
-    t2.destinationStates.push_back(nfa->startState);
+    t2.destinationStates.push_back(nfa->finalState);
     lNfa->finalState->transitions.push_back(t2);
 
-    nfa->finalState = lNfa->finalState;
+    struct Transition t3;
+    t3.inputChar = 'e';
+    t3.destinationStates.push_back(nfa->startState);
+    nfa->finalState->transitions.push_back(t3);
+
     return nfa;
 }
 
 NFA* eval_plus(Node* root){
-    NFA *nfa = new struct NFA;
-    NFA *lNfa = eval(root->left);
+    NFA* nfa = new struct NFA;
+    NFA* lNfa = eval(root->left);
     nfa->startState = new struct State;
-    nfa->finalState = lNfa->finalState;
+    nfa->finalState = new struct State;
 
     struct Transition t1;
     t1.inputChar = 'e';
@@ -183,8 +190,13 @@ NFA* eval_plus(Node* root){
 
     struct Transition t2;
     t2.inputChar = 'e';
-    t2.destinationStates.push_back(nfa->startState);
+    t2.destinationStates.push_back(nfa->finalState);
     lNfa->finalState->transitions.push_back(t2);
+
+    struct Transition t3;
+    t3.inputChar = 'e';
+    t3.destinationStates.push_back(nfa->startState);
+    nfa->finalState->transitions.push_back(t3);
 
     return nfa;
 }
@@ -205,59 +217,46 @@ NFA* eval_qmark(Node* root){
     return nfa;
 }
 
-set<State*> getAllStates(State *state) {
-    set<State*> visited;
-    stack<State*> toVisit;
-    toVisit.push(state);
-
-    while (!toVisit.empty()) {
-        State *current = toVisit.top();
-        toVisit.pop();
-
-        if (visited.find(current) == visited.end()) {
-            visited.insert(current);
-            for (Transition &trans : current->transitions) {
-                for (State *nextState : trans.destinationStates) {
-                    toVisit.push(nextState);
-                }
+void assignStateNumbers(State* state, int& nextNumber, unordered_map<State*, int> &stateNumbers) {
+    if (stateNumbers.find(state) == stateNumbers.end()) {
+        stateNumbers[state] = nextNumber++;
+        for (Transition& t : state->transitions) {
+            for (State* dest : t.destinationStates) {
+                assignStateNumbers(dest, nextNumber, stateNumbers);
             }
         }
     }
-
-    return visited;
 }
 
-int convertENFAToVector(vvvi &transitionVector, NFA *nfa, map<State*, int> &stateIndex) {
-    transitionVector.clear();
+int findNumberOfStates(NFA* nfa, unordered_map<State*, int> &stateNumbers){
+    int nextNumber = 0;
+    // Assign numbers to all states
+    assignStateNumbers(nfa->startState, nextNumber, stateNumbers);
+    assignStateNumbers(nfa->finalState, nextNumber, stateNumbers);
+    return stateNumbers.size();
+}
 
-    int index = 0;
-    for (State *state : getAllStates(nfa->startState)) {
-        stateIndex[state] = index++;
-    }
-
-    int numStates = stateIndex.size();
-    transitionVector.resize(numStates, vector<vector<int> >(3));
-
-    for (State *state : getAllStates(nfa->startState)) {
-        int sourceIndex = stateIndex[state];
-
-        for (int column = 0; column < 3; ++column) {
-            transitionVector[sourceIndex][column].resize(0); 
-
-            char symbol = (column == 0) ? 'a' : (column == 1) ? 'b' : 'e';
-
-            for(Transition &trans : state->transitions) {
-                if (trans.inputChar == symbol) {
-                    for (State *destinationState : trans.destinationStates) {
-                        int destIndex = stateIndex[destinationState];
-                        transitionVector[sourceIndex][column].push_back(destIndex);
-                    }
-                }
+int converteNFAToTable(NFA* nfa, vvvi &transitionVector, unordered_map<State*, int> &stateNumbers) {
+    int finalSt = 0;
+    int numStates = stateNumbers.size();
+    for (auto& entry : stateNumbers) {
+        State* state = entry.first;
+        if(state == nfa->finalState){
+            finalSt = entry.second;
+        }
+        int row = entry.second;
+        for(Transition t : state->transitions){
+            char c = t.inputChar;
+            int column;
+            if(c == 'a') column = 0;
+            else if(c == 'b') column = 1;
+            else if(c == 'e') column = 2;
+            for (State* dest : t.destinationStates) {
+                transitionVector[row][column].push_back(stateNumbers[dest]);
             }
         }
     }
-    int finalStateNumber = stateIndex[nfa->finalState];
-    return finalStateNumber;
+    return finalSt;
 }
 
 vector<int> epsilonClosure(int current, const vvvi &transitions)
@@ -290,7 +289,6 @@ vector<int> epsilonClosure(int current, const vvvi &transitions)
 vector<int> findTransitions(vector<int> states, const vvvi &transitions, int input)
 {
     set<int> temp;
-    
     for(int state: states){
         vector<int> temp1;
         temp1 = epsilonClosure(state, transitions);
@@ -300,10 +298,8 @@ vector<int> findTransitions(vector<int> states, const vvvi &transitions, int inp
             }
         }
     }
-
     set<int> temp2 = temp;
     temp.clear();
-
     for(int state: temp2){
         for (int k : transitions[state][input])
         {
@@ -313,10 +309,8 @@ vector<int> findTransitions(vector<int> states, const vvvi &transitions, int inp
             }
         }
     }
-
     temp2 = temp;
     temp.clear();
-
     for (int state : temp2)
     {
         vector<int> temp1;
@@ -329,13 +323,10 @@ vector<int> findTransitions(vector<int> states, const vvvi &transitions, int inp
             }
         }
     }
-
     vector<int> finalTrans;
-
     for(int k:temp){
         finalTrans.push_back(k);
     }
-
     return finalTrans;
 }
 
@@ -420,7 +411,7 @@ string convertToPostfix(string inputstr){
 				while(s.top()!='('){
 					postfixStr+=s.top();
 					s.pop();
-				}
+				}   
 				s.pop();
 				break;
 			default: 
@@ -472,44 +463,37 @@ Node* syntaxTree(const string &postfix){
     return st.top();
 }
 
-void printEpsilonNFA(vvvi eNFAtrans){
+/*void printEpsilonNFA(vvvi eNFAtrans){
     cout << "State\t0trans\t1trans\tetrans\n";
     for (size_t i = 0; i < eNFAtrans.size(); ++i) {
         cout << i << "\t";
         for (size_t j = 0; j < eNFAtrans[i].size(); ++j) {
             for (size_t k = 0; k < eNFAtrans[i][j].size(); ++k) {
-                if(eNFAtrans[i][j][k] != -1) cout << eNFAtrans[i][j][k];
+                if(eNFAtrans[i][j][k] != -1) cout << eNFAtrans[i][j][k] << " ";
             }
             cout << "\t";
         }
         cout << endl;
     }
-}
+}*/
 
 finalNFA* finalConversion(NFA* nfa, finalNFA* finalNFA){
     State* nfaStartState = nfa->startState;
     State* nfaFinalState = nfa->finalState;
 
-    vvvi myTransitionVector;
+    unordered_map<State*, int> stateNumbers;
+    int numStates = findNumberOfStates(nfa, stateNumbers);
+    vvvi myTransitionVector(numStates, vvi(3, vector<int>(numStates, -1)));
     vector<int> NFAfinalStates;
-    map<State*, int> myStateIndex;
-
-    int finalVal = convertENFAToVector(myTransitionVector, nfa, myStateIndex);
-    int numStates = myTransitionVector.size();
+    int finalVal = converteNFAToTable(nfa, myTransitionVector, stateNumbers);
     NFAfinalStates.push_back(finalVal);
-    cout << "The NFA with epsilon transitions is: " << endl;
-    printEpsilonNFA(myTransitionVector);
-    cout << "Number of states in NFA with epsilon transitions is: " << numStates << endl;
 
     vvvi newtran(numStates, vector<vector<int> >(3, vector<int>()));
     int toVisit = 1;
     newtran = convertNfa(myTransitionVector,numStates, toVisit);
     numStates = toVisit;
-    
-    cout << "Number of states in NFA is: " << numStates << endl;
 
     vvi newAcceptingStates = newFinalStates(NFAfinalStates, newtran, numStates);
-
     finalNFA->NFAtransitions = newtran;
     finalNFA->finalStates = newAcceptingStates;
     finalNFA->numStates = numStates;
@@ -517,7 +501,7 @@ finalNFA* finalConversion(NFA* nfa, finalNFA* finalNFA){
     return finalNFA;
 }
 
-void printFinalNFA(finalNFA* nfa){
+/*void printFinalNFA(finalNFA* nfa){
     int numStates = nfa->numStates;
     vvvi transitions = nfa->NFAtransitions;
     vvi newAcceptingStates = nfa->finalStates;
@@ -544,7 +528,8 @@ void printFinalNFA(finalNFA* nfa){
         cout<<"}  ";
     }
     cout << endl;
-}
+}*/
+
 bool isFinal(vector<int> state, const vvi &finalStates)
 {
     for (int i = 0; i < finalStates.size(); i++)
@@ -588,7 +573,7 @@ bool isAccepted(const vvvi &transitions, vvi finalStates, string str, const int 
 }
 
 int main(){
-    ifstream f("input3.txt");
+    ifstream f("input5.txt");
     string inputstr;
     getline(f, inputstr);
     int strlength = inputstr.length();
@@ -614,13 +599,6 @@ int main(){
         finalNFA* finNFA = new finalNFA;
         NFASet.push_back(finalConversion(ENFASet[i], finNFA));
     }
-    for(auto i : NFASet){
-        printFinalNFA(i);
-    }
-
-    string trial = "aab";
-    bool x = isAccepted(NFASet[1]->NFAtransitions, NFASet[1]->finalStates,trial, NFASet[1]->numStates);
-    cout << "string is " << x;
     vector<string> lexemes;
     vector<int> indices;
     int leftptr = 0;
@@ -640,6 +618,7 @@ int main(){
                 break;
             }
         }
+        if(leftptr == strlength) break;
         if(flag == 0){
             subSize--;
         }
@@ -650,8 +629,13 @@ int main(){
             indices.push_back(0);
         }
     }
+    string outputStr = "";
     for(int i = 0; i < lexemes.size(); i++){
-        cout << "<" << lexemes[i] << "," << indices[i] << ">";
+        string index = to_string(indices[i]);
+        outputStr.append('<' + lexemes[i] + ',' + index + '>');
     }
-    cout << endl;
+    ofstream outputFile("output.txt");
+    outputFile << outputStr;
+    outputFile.close();
+    return 0;
 }
