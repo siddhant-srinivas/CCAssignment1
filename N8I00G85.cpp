@@ -588,16 +588,29 @@ int main(){
     }
     vector<Node*> expressionTreeNodes;
     for(int i = 0; i < postfixStrings.size(); i++){
-        expressionTreeNodes.push_back(syntaxTree(postfixStrings[i]));
+        if(postfixStrings[i] == ""){
+            expressionTreeNodes.push_back(NULL);
+        }
+        else
+            expressionTreeNodes.push_back(syntaxTree(postfixStrings[i]));
     }
     vector<NFA*> ENFASet;
     for(int i = 0; i < expressionTreeNodes.size(); i++){
-        ENFASet.push_back(eval(expressionTreeNodes[i]));
+        if(expressionTreeNodes[i] == NULL){
+            ENFASet.push_back(NULL);
+        }
+        else
+            ENFASet.push_back(eval(expressionTreeNodes[i]));
     }
     vector<finalNFA*> NFASet;
     for(int i = 0; i < ENFASet.size(); i++){
-        finalNFA* finNFA = new finalNFA;
-        NFASet.push_back(finalConversion(ENFASet[i], finNFA));
+        if(ENFASet[i] == NULL){
+            NFASet.push_back(NULL);
+        }
+        else{
+            finalNFA* finNFA = new finalNFA;
+            NFASet.push_back(finalConversion(ENFASet[i], finNFA));
+        }
     }
     vector<string> lexemes;
     vector<int> indices;
@@ -605,11 +618,12 @@ int main(){
     int subSize = strlength;
     int count = 0;
 
-    //Dealing with empty strings
+    //Dealing with empty strings, not needed as it as mentioned that input string is non-empty
     if(strlength == 0){
         int emptyFlag = 0;
         string emptyString = "";
         for(int i = 0; i < NFASet.size(); i++){
+            if(NFASet[i] == NULL) continue;	
             if(isAccepted(NFASet[i]->NFAtransitions, NFASet[i]->finalStates, emptyString, NFASet[i]->numStates) == true){
                 emptyFlag = 1;
                 lexemes.push_back(emptyString);
@@ -627,6 +641,7 @@ int main(){
         string subString = inputstr.substr(leftptr, subSize);
         int flag = 0;
         for(int i = 0; i < NFASet.size(); i++){
+            if(NFASet[i] == NULL) continue;
             if(isAccepted(NFASet[i]->NFAtransitions, NFASet[i]->finalStates, subString, NFASet[i]->numStates) == true){
                 int oldleftptr = leftptr;
                 leftptr = oldleftptr + subSize;
